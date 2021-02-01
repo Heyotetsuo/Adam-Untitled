@@ -1,5 +1,6 @@
 var doc=document,win=window,cd,SZ,nums,temp,clr,ctr;
-var rnd=Math.random,round=Math.round,max=Math.max,min=Math.min,PI=Math.PI;
+var abs=Math.abs,rnd=Math.random,round=Math.round,max=Math.max,min=Math.min;
+var PI=Math.PI;
 var CVS=doc.querySelector("#comp1"),CVS2=doc.querySelector("#comp2");
 var C=CVS.getContext("2d"),C2=CVS2.getContext("2d");
 var bgs=[ [ "#eee", "#ddd" ] ];
@@ -130,15 +131,22 @@ function drawChar( args ){
 	for( i=0;i<parts.length;i++){
 		p = parts[i];
 		if ( chars[n][p] ){
-			addShape( chars[n][p], [sz,sz], [x1,y], C );
-			drawStdStyle( chars[n][p] );
+			if ( to1N(nums[idx]) < 0.3  ){
+				addShape( chars[n][p], [sz,sz], [SZ/2,y], C );
+				drawStdStyle( chars[n][p] );
+			} else {
+				addShape( chars[n][p], [sz,sz], [x1,y], C );
+				drawStdStyle( chars[n][p] );
+				addShape( chars[n][p], [sz,sz], [x2,y], C );
+				drawStdStyle( chars[n][p] );
+			}
 		}
 	}
 }
 function render(){
 	clear( C );
 	canvasAction( drawBG, 0 );
-	var n = nums[0]%32,i;
+	var n = nums[0]%8+1,i;
 	var sz = to1(nums[1])*2;
 	for(i=0;i<n;i++){
 		canvasAction( drawChar, nums[i]%2, sz, i );
