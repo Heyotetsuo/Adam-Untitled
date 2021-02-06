@@ -1,6 +1,6 @@
-var doc=document,win=window,cd,SZ,nums,temp,clr,ctr;
+var doc=document,win=window,cd,SZ,nums,temp,clr,ctr,grid;
 var abs=Math.abs,rnd=Math.random,round=Math.round,max=Math.max,min=Math.min;
-var PI=Math.PI;
+var ceil=Math.ceil,floor=Math.floor,PI=Math.PI;
 var CVS=doc.querySelector("#comp1"),CVS2=doc.querySelector("#comp2");
 var C=CVS.getContext("2d"),C2=CVS2.getContext("2d");
 var bgs=[ [ "#eee", "#ddd" ] ];
@@ -23,12 +23,19 @@ function normInt(s){ return parseInt(s,32)-SZ }
 function d2r(n){ return n*PI/180 }
 function to1(n){ return n/255 };
 function to1N(n){ return n/128-1 };
-function getNums(){
-	var hashPairs=[],seed,rvs,j=0;
+function getNums2(){
+	var hashSingles=[],seed,rvs,i=0;
 	seed = parseInt( tokenData.hash.slice(0,16), 16 );
-	for(j=0;j<32;j++){
+	for(i=0;i<64;i++) hashPairs.push(tokenData.hash.charAt(i));
+	rvs = hashPairs.map(n=>parseInt(n,16));
+	return rvs;
+}
+function getNums(){
+	var hashPairs=[],seed,rvs,i=0;
+	seed = parseInt( tokenData.hash.slice(0,16), 16 );
+	for(i=0;i<32;i++){
 		hashPairs.push(
-			tokenData.hash.slice( 2+(j*2),4+(j*2) )
+			tokenData.hash.slice( 2+(i*2),4+(i*2) )
 		);
 	}
 	rvs = hashPairs.map(n=>parseInt(n,16));
@@ -121,32 +128,99 @@ function drawBG(){
 	C.fillStyle = "#eee";
 	C.fillRect(0,0,SZ,SZ);
 }
+function cellIsTaken( ix, iy ){ return cd.taken[ix+iy] }
+function getCellData(){
+	var i = cd.taken.length || 0,j=0;
+	var x,y,ix,iy,lastx,lasty;
+	while( cd.drawn < cd.nchars * floor(cd.nchars/2) ){
+		x = floor( nums[(i+j)%32]/2 ) % floor( cd.nchars/2 )+1;
+		y = floor( nums[(i+j+1)%32] ) % cd.nchars;
+		ix = x.toString();
+		iy = y.toString();
+		lastx = grid.x.length-1;
+		lasty = grid.y.length-1;
+		if ( cd.taken[ix+iy] !== true ){
+			cd.taken[ix+iy] = true;
+			cd.drawn++;
+			console.log( x + ", " + y );
+			return [ grid.x[x], grid.y[y], {
+				left: grid.x[abs(x-1)],
+				right: grid.x[(x+1>lastx?x-1:x+1)],
+				up: grid.y[max(0,y-1)],
+				down: grid.y[(y+1>lasty?y-1:y+1)]
+			}];
+		}
+		j++;
+	}
+}
+function getSize( data ){
+	return abs(Math.min.apply(
+		Math,
+		[
+			data[0] - data[2].left,
+			data[2].right - data[0],
+			data[1] - data[2].up,
+			data[2].down - data[1]
+		]
+	)) / (SZ*0.33);
+}
 function drawChar( args ){
 	var parts=["head","body","eye1","eye2","nose","mouth"];
-	var n=args[0], sz=args[1]||0.5, idx=args[2]%(nums.length-1);
-	var p,i;
-	var x1 = ctr[0] + to1N(nums[idx])*SZ/4;
-	var x2 = ctr[0] + to1N(nums[idx])*-1*SZ/4;
-	var y = ctr[1] + to1N(nums[idx+1])*SZ/4;
-	for( i=0;i<parts.length;i++){
+	var data = getCellData() || [SZ/2,SZ/2];
+	var sz = 2.5/cd.nchars;
+	var x1=data[0], x2=SZ-data[0], y=data[1];
+	var n=args[0], idx=args[2]%(nums.length-1);
+	for( i=0;i<parts.length;i++ ){
 		p = parts[i];
 		if ( chars[n][p] ){
-			if ( to1N(nums[idx]) < 0.3  ){
-				addShape( chars[n][p], [sz,sz], [SZ/2,y], C );
-				drawStdStyle( chars[n][p] );
-			} else {
-				addShape( chars[n][p], [sz,sz], [x1,y], C );
-				drawStdStyle( chars[n][p] );
-				addShape( chars[n][p], [sz,sz], [x2,y], C );
-				drawStdStyle( chars[n][p] );
-			}
+			addShape(
+				chars[n][p], [sz,sz], [x1,y], C
+			);
+			drawStdStyle( chars[n][p] );
+			addShape(
+				chars[n][p], [sz,sz], [x2,y], C
+			);
+			drawStdStyle( chars[n][p] );
 		}
+	}
+}
+function buildGrid(){
+	var n = cd.nchars;
+	var xArr=[], yArr=[], step=SZ/(n+1), i;
+	var xStep = SZ/n, yStep = SZ/(n+1);
+	for(i=0;i<=floor(n/2);i++){
+		xArr.push( yStep + yStep*i );
+		// xArr.push( to1(nums[i%32]) * step + step*i );
+	}
+	for(i=0;i<n;i++){
+		yArr.push( yStep + yStep*i );
+		// yArr.push( to1(nums[(i*3)%32]) * step + step*i );
+	}
+	grid = { x: xArr, y: yArr, used: false };
+}
+function showGrid(){
+	C.strokeStyle = "black";
+	C.lineWidth = 1, i;
+	for(i=0;i<grid.y.length;i++){
+		C.beginPath();
+		C.moveTo( 0, grid.y[i] );
+		C.lineTo( SZ, grid.y[i] );
+		C.stroke();
+	}
+	for(i=0;i<grid.x.length;i++){
+		C.beginPath();
+		C.moveTo( grid.x[i], 0 );
+		C.lineTo( grid.x[i], SZ );
+		C.moveTo( SZ-grid.x[i], 0 );
+		C.lineTo( SZ-grid.x[i], SZ );
+		C.stroke();
 	}
 }
 function render(){
 	clear( C );
 	canvasAction( drawBG, 0 );
-	var n = nums[0]%8+1,i;
+	// canvasAction( showGrid );
+	var n = cd.nchars, i;
 	var sz = to1(nums[1])*2;
 	for(i=0;i<n;i++){
 		canvasAction( drawChar, nums[i]%2, sz, i );
@@ -164,7 +238,11 @@ function init(){
 		bg: [ "#acf", "#05a" ],
 		char: [ "#dfd319", "#20e272" ]
 	}
-	cd = { lwidth:SZ/128, soff:0.1, poff:0.03 }
+	cd = {
+		lwidth:SZ/128, soff:0.1, poff:0.03,
+		nchars: (nums[0]%6+2)*2-1, taken: {}, drawn:0
+	}
+	buildGrid();
 }
 function main(){
 	init();
