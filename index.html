@@ -10,7 +10,11 @@
 	<div id="shadow">
 		<canvas id="comp2"></canvas>
 	</div>
-	<canvas id="comp1"></canvas>
+	<div style="font-size:2em" id="wrap">
+		<div>Color:</div>
+		<input type="text" onchange="updateBG(this)"></input><br>
+		<canvas id="comp1"></canvas>
+	</div>
 </body>
 <script>
 var floor=Math.floor, rnd=Math.random, i=0, c;

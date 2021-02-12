@@ -3,16 +3,24 @@ body {
 	padding: 0;
 	background-color: #fff;
 }
-canvas {
+input{
+	width: 25%;
+	font-size: 1em;
+}
+#shadow{
+	display: none;
+}
+#wrap{
+	font-size: 2em;
+	font-family: sans-serif, arial;
 	padding: 0;
-	margin: auto;
+	margin: 1em;
 	display: block;
-	position: absolute;
+	text-align: center;
 	top: 0;
 	bottom: 0;
 	left: 0;
 	right: 0;
-}
-#shadow{
-	display: none;
+	width: 100%;
+	height: 100%;
 }
