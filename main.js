@@ -146,7 +146,7 @@ function drawChar( args ){
 	var x1=data[0], x2=SZ-data[0], y=data[1];
 	var rot=( round(x1)===SZ/2 ? 0 : args[3]*PI/180 );
 	var n = args[0];
-	var pad = data[4] || getPadding( data[2], data[3] );
+	var pad = min(data[4], getPadding(data[2],data[3]) );
 	console.log( pad );
 	var sz = (4/cd.nchars)*pad;
 	if ( n === 2 ) sz/=1.5;
