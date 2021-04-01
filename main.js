@@ -164,10 +164,16 @@ function tryGrow(c){
 }
 function getCellData(){
 	var i = cd.taken.length || 0, j=0, x,y,ix,iy, id;
-	var rowlen = cd.rows.length/8;
-	var collen = cd.cols.length/8;
+	var rowlen = cd.rows.length;
+	var collen = cd.cols.length;
 	while( cd.drawn < rowlen*collen ){
-		x = (urint()%collen)*8, y = (urint()%rowlen)*8;
+		x = urint()%collen, y = urint()%rowlen;
+		if (
+			urint()%2 > 0 ||
+			x > collen*0.75
+		){
+			x = collen-1;
+		}
 		ix = x.toString(), iy = y.toString();
 		id = ix+'-'+iy;
 		if ( cd.taken[id] !== true ){
@@ -206,7 +212,7 @@ function drawChar( args ){
 	var x1=c.x, x2=SZ-c.x, y=c.y, sz = c.sz+c.sz*c.pad;
 	var rot=( round(x1)===SZ/2 ? 0 : rf()*45*PI/180 );
 	var n = args[0];
-	console.log( round(x1) );
+	if ( debugEnabled ) console.log( round(x1) );
 	if ( n === 2 ) sz *= 0.63; // green ones are 37% too wide.. :P
 	transWithAnchor( x1, y, C, ()=>{
 		C.rotate( rot );
