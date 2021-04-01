@@ -1,4 +1,4 @@
-var doc=document,win=window,cd,SZ,nums,clr,ctr,grid,tmp;
+var doc=document,win=window,cd,SZ,clr,ctr,tmp,seed,debugEnabled=false;
 var abs=Math.abs,rnd=Math.random,round=Math.round,max=Math.max,min=Math.min;
 var ceil=Math.ceil,floor=Math.floor,PI=Math.PI;
 var CVS=doc.querySelector("#comp1"),CVS2=doc.querySelector("#comp2");
@@ -13,24 +13,18 @@ function normInt(s){ return parseInt(s,32)-SZ }
 function d2r(n){ return n*PI/180 }
 function to1(n){ return n/255 };
 function to1N(n){ return n/128-1 };
-function getNums2(){
-	var hashSingles=[],seed,rvs,i=0;
-	seed = parseInt( tokenData.hash.slice(0,16), 16 );
-	for(i=0;i<64;i++) hashPairs.push(tokenData.hash.charAt(i));
-	rvs = hashPairs.map(n=>parseInt(n,16));
-	return rvs;
+function rint(){
+	seed ^= seed << 13;
+	seed ^= seed >> 17;
+	seed ^= seed << 5;
+	return seed;
 }
-function getNums(){
-	var hashPairs=[],seed,rvs,i=0;
-	seed = parseInt( tokenData.hash.slice(0,16), 16 );
-	for(i=0;i<32;i++){
-		hashPairs.push(
-			tokenData.hash.slice( 2+(i*2),4+(i*2) )
-		);
-	}
-	rvs = hashPairs.map(n=>parseInt(n,16));
-	return rvs;
+function urint(){ return abs(rint()); }
+function urf(){
+	var seed = rint();
+	return ( (seed<0?~seed+1:seed)%1024 ) / 1024;
 }
+function rf(){ return urf()*2-1 }
 function clear( C ){ C.clearRect(0,0,SZ,SZ) }
 function canvasAction( callback ){
 	C.save();
@@ -105,56 +99,121 @@ function handleKeyPress(){
 }
 function drawBG(){
 	clear( C );
-	C.fillStyle = tmp || clr.bg[nums[5]%clr.bg.length];
+	C.fillStyle = tmp || clr.bg[ urint()%clr.bg.length ];
 	C.fillRect(0,0,SZ,SZ);
-}
-function cellIsTaken( ix, iy ){ return cd.taken[ix+iy] }
-function getCellData(){
-	var i = cd.taken.length || 0,j=0;
-	var x,y,ix,iy,lastx,lasty;
-	while( cd.drawn < cd.nchars * floor(cd.nchars/2) ){
-		x = floor( nums[(i+j)%32]/2 ) % floor( cd.nchars/2 )+1;
-		y = floor( nums[(i+j+1)%32] ) % cd.nchars;
-		ix = x.toString();
-		iy = y.toString();
-		lastx = grid.x.length-1;
-		lasty = grid.y.length-1;
-		if ( cd.taken[ix+iy] !== true ){
-			cd.taken[ix+iy] = true;
-			cd.drawn++;
-			return [
-				grid.x[x], grid.y[y],
-				x, y,
-				nums[ (i*j+j)%32 ] / 128+1
-			];
-		}
-		j++;
-	}
 }
 function transWithAnchor( x, y, C, callback ){
 	C.translate( x, y );
 	callback( [].slice.call(arguments,3) );
 	C.translate( x*-1, y*-1 );
 }
+function debugPoint( x, y ){
+	canvasAction( ()=>{
+		C.beginPath();
+		C.lineCap = "round";
+		C.moveTo( x, y );
+		C.lineTo( x, y );
+		C.lineWidth = 12;
+		C.strokeStyle = "black";
+		C.stroke();
+		C.lineWidth = 8;
+		C.strokeStyle = "red";
+		C.stroke();
+	} );
+}
+function cellIsTaken( ix, iy ){
+	var x = parseInt(ix), y = parseInt(iy);
+	var id = ix+'-'+iy;
+	if ( cd.taken[id] ){
+		return true;
+	}
+}
+function takeCells( a, b ){
+	var i, j, sx, sy, px, py, id;
+	for( i=a[0]; i<=b[0]; i++ ){
+ 		for( j=a[1]; j<=b[1]; j++ ){
+			px = cd.cols[i];
+			py = cd.rows[j];
+			if ( debugEnabled) debugPoint( px, py );
+			id = i.toString() + '-' + j.toString();
+			if ( !cd.taken[id] ){
+				cd.taken[id] = true;
+			}
+		}
+	}
+}
+function tryGrow(c){
+	var pad = c.pad+1, sx, sy, i, j;
+	var minx=c.ix-pad, miny=c.iy-pad;
+	var maxx=c.ix+pad, maxy=c.iy+pad;
+	for ( i=minx; i<=maxx; i++ ){
+		sx = i.toString(), sy = miny.toString();
+		if ( cellIsTaken(sx,sy) ) return false;
+		sy = maxy.toString();
+		if ( cellIsTaken(sx,sy) ) return false;
+	}
+	for ( i=miny; i<=maxy; i++ ){
+		sx = minx.toString(), sy = i.toString();
+		if ( cellIsTaken(sx,sy) ) return false;
+		sx = maxx.toString();
+		if ( cellIsTaken(sx,sy) ) return false;
+	}
+	takeCells( [minx,miny], [maxx,maxy] );
+	c.pad++;
+	return true;
+}
+function getCellData(){
+	var i = cd.taken.length || 0, j=0, x,y,ix,iy, id;
+	var rowlen = cd.rows.length/8;
+	var collen = cd.cols.length/8;
+	while( cd.drawn < rowlen*collen ){
+		x = (urint()%collen)*8, y = (urint()%rowlen)*8;
+		ix = x.toString(), iy = y.toString();
+		id = ix+'-'+iy;
+		if ( cd.taken[id] !== true ){
+			cd.taken[id] = true;
+			cd.drawn++;
+			return {
+				x: cd.cols[x], y: cd.rows[y],
+				ix: x, iy: y, sz: 1/cd.nchars, pad: 0
+			}
+		}
+		j++;
+	}
+}
 function mapChars( n ){
-	for(var i=0;i<n;i++){
+	var fails, c, x, y, i;
+	for(i=0;i<n;i++){
 		charBuff.push( getCellData() || [SZ/2,SZ/2] );
+	}
+	// adjust sizes
+	while(1){
+		fails = 0;
+		for(i=0;i<n;i++){
+			c = charBuff[i];
+			if ( !tryGrow(c) ){
+				fails++;
+			}
+			if ( debugEnabled ) console.log( c.ix+", "+c.iy+": "+c.pad );
+		}
+		if ( fails === n ){
+			break;
+		}
 	}
 }
 function drawChar( args ){
-	var data = charBuff.shift();
-	var x1=data[0], x2=SZ-data[0], y=data[1];
-	var rot=( round(x1)===SZ/2 ? 0 : args[3]*PI/180 );
+	var c = charBuff.shift();
+	var x1=c.x, x2=SZ-c.x, y=c.y, sz = c.sz+c.sz*c.pad;
+	var rot=( round(x1)===SZ/2 ? 0 : rf()*45*PI/180 );
 	var n = args[0];
-	var pad = min(data[4], getPadding(data[2],data[3]) );
-	console.log( pad );
-	var sz = (4/cd.nchars)*pad;
-	if ( n === 2 ) sz/=1.5;
+	console.log( round(x1) );
+	if ( n === 2 ) sz *= 0.63; // green ones are 37% too wide.. :P
 	transWithAnchor( x1, y, C, ()=>{
 		C.rotate( rot );
 		renderLayer( chars[n], [sz,sz], [0,0], C );
 		C.rotate( rot * -1 );
 	});
+	if ( debugEnabled ) return;
 	transWithAnchor( x2, y, C, ()=>{
 		C.rotate( rot * -1 );
 		renderLayer( chars[n], [sz,sz], [0,0], C );
@@ -162,50 +221,32 @@ function drawChar( args ){
 	});
 }
 function buildGrid(){
-	var n = cd.nchars;
+	var n = cd.nchars*8;
+	var nx = floor(n/2);
 	var xArr=[], yArr=[], step=SZ/(n+1), i;
-	var xStep = SZ/n, yStep = SZ/(n+1);
-	for(i=0;i<=floor(n/2);i++){
-		xArr.push( yStep + yStep*i );
-		// xArr.push( to1(nums[i%32]) * step + step*i );
+	var xStep = SZ/2/(nx+1), yStep = SZ/(n+1);
+	for(i=0;i<=nx;i++){
+		xArr.push( xStep + xStep*i );
 	}
 	for(i=0;i<n;i++){
 		yArr.push( yStep + yStep*i );
-		// yArr.push( to1(nums[(i*3)%32]) * step + step*i );
 	}
-	grid = { x: xArr, y: yArr };
-}
-function getPadding( x, y ){
-	var lvl = 1;
-	var curr, i=max(x-lvl,0), j=max(y-lvl,0);
-	var xmax = min( x+lvl, grid.x.length-1 );
-	var ymax = min( y+lvl, grid.y.length-1 );
-	for(; i<=min(x+lvl,xmax); i++){
-		for(; j<=y+lvl; j++){
-			curr = String(i) + String(j);
-			if (cd.taken[curr] === true){
-				return lvl;
-			}
-		}
-		lvl++;
-	}
-	return round( lvl / 2 );
+	cd.cols=xArr, cd.rows=yArr;
 }
 function showGrid(){
 	C.strokeStyle = "black";
 	C.lineWidth = 1, i;
-	for(i=0;i<grid.y.length;i++){
+	var xArr = cd.cols, yArr = cd.rows;
+	for(i=0;i<yArr.length;i++){
 		C.beginPath();
-		C.moveTo( 0, grid.y[i] );
-		C.lineTo( SZ, grid.y[i] );
+		C.moveTo( 0, yArr[i] );
+		C.lineTo( SZ, yArr[i] );
 		C.stroke();
 	}
-	for(i=0;i<grid.x.length;i++){
+	for(i=0;i<xArr.length;i++){
 		C.beginPath();
-		C.moveTo( grid.x[i], 0 );
-		C.lineTo( grid.x[i], SZ );
-		C.moveTo( SZ-grid.x[i], 0 );
-		C.lineTo( SZ-grid.x[i], SZ );
+		C.moveTo( xArr[i], 0 );
+		C.lineTo( xArr[i], SZ );
 		C.stroke();
 	}
 }
@@ -215,22 +256,16 @@ function updateBG(el){
 }
 function render(){
 	clear( C );
-	mapChars( cd.nchars );
 	canvasAction( drawBG, 0 );
-	// canvasAction( showGrid );
-	var sz=to1(nums[1])*2, n=cd.nchars,i;
-	for(i=0;i<n;i++){
-		canvasAction(
-			drawChar,
-			nums[i]%chars.length,
-			sz, i,
-			nums[(i+2)%nums.length]%90
-		);
+	if ( debugEnabled ) canvasAction( showGrid );
+	mapChars( cd.nchars );
+	for( var i=0;i<cd.nchars;i++){
+		canvasAction( drawChar, urint()%chars.length );
 	}
 }
 function init(){
-	nums = getNums();
 	SZ = 800;
+	seed = parseInt( "0x" + tokenData.hash.slice(2,16) );
 	ctr = [SZ/2,SZ/2];
 	CVS.setAttribute( "width", SZ );
 	CVS.setAttribute( "height", SZ );
@@ -242,7 +277,8 @@ function init(){
 	}
 	cd = {
 		lwidth:SZ/128, soff:0.1, poff:0.03,
-		nchars: (nums[0]%6+2)*2-1, taken: {}, drawn:0
+		nchars: (urint()%12+4), taken: {}, drawn:0,
+		cols:[], rows:[]
 	}
 	buildGrid();
 }
